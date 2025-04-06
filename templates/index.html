@@ -51,7 +51,7 @@
             <div id="event-modal" class="modal" style="display: none;">
                 <div class="modal-content">
                     <span class="close-button">&times;</span>
-                    <h2>Add New Event</h2>
+                    <h2 id="modal-title">Add New Event</h2>
                     <label for="event-title">Title:</label>
                     <input type="text" id="event-title" name="event-title"><br><br>
 
@@ -61,10 +61,15 @@
                         <!-- Project options will be loaded here by JS -->
                     </select><br><br>
 
-                    <p><strong>Time Slot:</strong> <span id="modal-time-slot"></span></p>
+                    <label for="event-start-time">Start Time:</label>
+                    <input type="time" id="event-start-time" name="event-start-time" step="600"><br><br>
+
+                    <label for="event-end-time">End Time:</label>
+                    <input type="time" id="event-end-time" name="event-end-time" step="600"><br><br>
+
                     <p><strong>Day:</strong> <span id="modal-day"></span></p>
-                    <input type="hidden" id="modal-start-time">
                     <input type="hidden" id="modal-day-index">
+                    <input type="hidden" id="modal-edit-event-id"> <!-- Hidden field for edit ID -->
                     <button id="save-event">Save Event</button>
                 </div>
             </div>
