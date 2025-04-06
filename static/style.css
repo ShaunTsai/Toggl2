@@ -1,0 +1,291 @@
+body {
+    font-family: sans-serif;
+    margin: 0; /* Remove default margin */
+    background-color: #f4f4f4;
+    display: flex; /* Use flexbox for overall layout */
+    min-height: 100vh; /* Ensure body takes full height */
+}
+
+.app-container { /* Renamed body selector */
+    display: flex;
+    width: 100%; /* Take full width */
+}
+
+.sidebar {
+    width: 200px; /* Fixed width for sidebar */
+    flex-shrink: 0; /* Prevent sidebar from shrinking */
+    background-color: #e9ecef;
+    padding: 15px;
+    border-right: 1px solid #ccc;
+    height: 100vh; /* Make sidebar full height */
+    overflow-y: auto; /* Allow scrolling if content exceeds height */
+    box-sizing: border-box;
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    color: #333;
+    text-align: center;
+}
+
+#project-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+}
+
+#project-list li {
+    padding: 8px 5px;
+    margin-bottom: 5px;
+    background-color: #fff;
+    border-radius: 3px;
+    border: 1px solid #ddd;
+    font-size: 0.9em;
+    cursor: pointer; /* Indicate clickable (though not used yet) */
+}
+#project-list li:hover {
+    background-color: #f0f0f0;
+}
+
+.add-project-form input[type="text"] {
+    width: calc(100% - 12px); /* Account for padding/border */
+    padding: 6px;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+.add-project-form button {
+    width: 100%;
+    padding: 8px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.add-project-form button:hover {
+    background-color: #218838;
+}
+
+
+.main-content {
+    flex-grow: 1; /* Allow main content to fill remaining space */
+    padding: 20px;
+    overflow: auto; /* Allow scrolling for calendar etc. if needed */
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-top: 0; /* Adjusted margin */
+    margin-bottom: 15px;
+}
+
+.calendar-container {
+    display: flex;
+    margin-top: 20px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    /* Make container scrollable if content overflows */
+    overflow: auto;
+    max-height: 80vh; /* Limit height to encourage scrolling */
+}
+
+.time-axis {
+    width: 60px; /* Width for time labels */
+    padding-top: 30px; /* Align with grid content */
+    border-right: 1px solid #eee;
+    background-color: #f9f9f9;
+    flex-shrink: 0; /* Prevent time axis from shrinking */
+    position: sticky; /* Keep time axis visible */
+    left: 0;
+    z-index: 10; /* Ensure time axis is above grid lines */
+}
+
+.time-label {
+    height: 60px; /* Match time slot height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #555;
+    border-bottom: 1px dashed #eee; /* Visual guide */
+    box-sizing: border-box;
+}
+.time-label:last-child {
+    border-bottom: none;
+}
+
+
+.calendar-grid {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allow grid to take remaining space */
+}
+
+.days-header {
+    display: flex;
+    height: 30px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+     position: sticky; /* Keep header visible */
+     top: 0;
+     z-index: 5; /* Below time axis but above grid content */
+}
+
+.day-label {
+    flex: 1; /* Equal width for each day */
+    text-align: center;
+    font-weight: bold;
+    line-height: 30px; /* Center text vertically */
+    border-right: 1px solid #eee;
+    font-size: 14px;
+    color: #333;
+}
+.day-label:first-child { /* Style the placeholder Time column header */
+     flex-basis: 60px; /* Match time axis width */
+     flex-grow: 0;
+     flex-shrink: 0;
+     border-right: 1px solid #ccc; /* Make border more prominent */
+     background-color: #f9f9f9; /* Match time axis background */
+     /* Make sticky with the time-axis */
+     position: sticky;
+     left: 0;
+     z-index: 11; /* Above time axis */
+ }
+.day-label:last-child {
+    border-right: none;
+}
+
+
+.grid-content {
+    display: flex;
+    flex-grow: 1; /* Allow content to fill remaining space */
+    position: relative; /* Needed for absolute positioning of events */
+}
+
+.day-column {
+    flex: 1; /* Equal width */
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #eee;
+    position: relative; /* For positioning events within the column */
+}
+.day-column:last-child {
+    border-right: none;
+}
+
+.time-slot {
+    height: 60px; /* Height for each hour */
+    border-bottom: 1px dashed #eee;
+    box-sizing: border-box; /* Include border in height */
+    position: relative; /* Context for event positioning */
+    cursor: pointer; /* Indicate clickable */
+    transition: background-color 0.2s ease; /* Smooth hover effect */
+}
+.time-slot:last-child {
+     border-bottom: none; /* No border for the last slot */
+ }
+
+.time-slot:hover {
+    background-color: #e9f5ff; /* Light blue background on hover */
+}
+
+/* --- Event Styling --- */
+.event {
+    position: absolute;
+    left: 2px; /* Small padding from left edge */
+    right: 2px; /* Small padding from right edge */
+    background-color: #4a90e2; /* Blue background */
+    color: white;
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default; /* Normal cursor for events */
+    z-index: 1; /* Events appear above time slots */
+    box-sizing: border-box;
+    border: 1px solid #357abd; /* Slightly darker border */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* --- Modal Styling --- */
+.modal {
+  position: fixed; /* Stay in place */
+  z-index: 20; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto; /* 15% from the top and centered */
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%; /* Could be more or less, depending on screen size */
+  max-width: 400px; /* Max width */
+  border-radius: 5px;
+  box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+}
+
+.close-button {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close-button:hover,
+.close-button:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#save-event {
+    background-color: #4CAF50; /* Green */
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#save-event:hover {
+    background-color: #45a049;
+}
+
+#export-csv {
+    display: block;
+    margin: 10px auto 20px auto; /* Center the button */
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+#export-csv:hover {
+    background-color: #0056b3;
+}
