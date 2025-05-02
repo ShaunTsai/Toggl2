@@ -10,6 +10,14 @@ function getContrastYIQ(hexcolor){
 
 let currentEvents = {}; // Store fetched events by ID
 
+// --- IndexedDB Initialization with Dexie.js ---
+// Database: calendarDB, Table: events
+const db = new Dexie('calendarDB');
+db.version(1).stores({
+    events: 'id,title,dayIndex,date,start,end,projectId' // id is primary key
+});
+// --- End IndexedDB Init ---
+
 document.addEventListener('DOMContentLoaded', function() {
     const gridContent = document.querySelector('.grid-content');
     const timeAxis = document.querySelector('.time-axis');
@@ -19,8 +27,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const addProjectButton = document.getElementById('add-project-button');
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Step 1: Attach handler to 'Today' button
+    const todayBtn = document.querySelector('.calendar-nav-today');
+    if (todayBtn) {
+        todayBtn.addEventListener('click', function() {
+            console.log('[Today Button] Clicked: will jump to week containing today');
+            // Step 2: Calculate start of this week (Sunday as start)
+            const now = new Date();
+            const weekStart = new Date(now);
+            weekStart.setHours(0,0,0,0); // Midnight
+            weekStart.setDate(now.getDate() - now.getDay()); // Go back to Sunday
+            // Update global state
+            currentWeekStart = weekStart;
+            console.log('[Today Button] Calculated weekStart:', weekStart);
+            // Step 3: re-render calendar for new week
+            setCalendarHeaderDates();
+            renderCalendarGrid();
+            loadEvents();
+            console.log('[Today Button] Calendar re-rendered for week containing today');
+        });
+    }
     const hours = 24; // 24 hours a day
     const slotHeight = 60; // Matches CSS: height of .time-slot
+    const timeAxisWidth = 60; // Width of the time axis in pixels
+
+    // Store column width calculation for reuse
+    let dayColumnWidth = 0;
+    function calculateDayColumnWidth() {
+        const gridWidth = gridContent.offsetWidth;
+        const dayColumnsWidth = gridWidth - timeAxisWidth; // timeAxisWidth defined earlier
+        dayColumnWidth = dayColumnsWidth / days.length;
+    }
 
     // --- Modal Elements ---
     const modal = document.getElementById('event-modal');
@@ -30,6 +68,42 @@ document.addEventListener('DOMContentLoaded', function() {
     const eventTitleInput = document.getElementById('event-title');
     const eventStartTimeInput = document.getElementById('event-start-time'); // New input
     const eventEndTimeInput = document.getElementById('event-end-time');   // New input
+
+    // --- Settings Elements ---
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const closeSettingsBtn = document.querySelector('.close-settings');
+    const defaultDurationInput = document.getElementById('default-duration');
+    const saveSettingsBtn = document.getElementById('save-settings');
+
+    // --- Settings Logic ---
+    function getDefaultDuration() {
+        const val = localStorage.getItem('defaultEventDuration');
+        return val ? parseInt(val) : 60;
+    }
+    function setDefaultDuration(val) {
+        localStorage.setItem('defaultEventDuration', val);
+    }
+    // Open settings modal
+    settingsBtn.onclick = function() {
+        defaultDurationInput.value = getDefaultDuration();
+        settingsModal.style.display = 'block';
+    };
+    // Close settings modal
+    closeSettingsBtn.onclick = function() {
+        settingsModal.style.display = 'none';
+    };
+    // Save settings
+    saveSettingsBtn.onclick = function() {
+        let val = parseInt(defaultDurationInput.value);
+        if (isNaN(val) || val < 1 || val > 240) val = 60;
+        setDefaultDuration(val);
+        settingsModal.style.display = 'none';
+    };
+    // Close modal if background clicked
+    window.addEventListener('click', function(event) {
+        if (event.target === settingsModal) settingsModal.style.display = 'none';
+    });
     const modalDaySpan = document.getElementById('modal-day');
     const modalDayIndexInput = document.getElementById('modal-day-index');
     const modalEditEventIdInput = document.getElementById('modal-edit-event-id'); // For editing
@@ -38,6 +112,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Export Button ---
     const exportButton = document.getElementById('export-csv');
 
+
+    // --- Week State ---
+    // Track the start of the currently displayed week (Sunday)
+    let currentWeekStart = getStartOfWeek(new Date());
+
+    function getStartOfWeek(date) {
+        // Returns a new Date object set to the most recent Sunday
+        const d = new Date(date);
+        d.setHours(0,0,0,0);
+        d.setDate(d.getDate() - d.getDay());
+        return d;
+    }
 
     // --- Generate Time Axis Labels ---
     for (let i = 0; i < hours; i++) {
@@ -50,30 +136,230 @@ document.addEventListener('DOMContentLoaded', function() {
         timeAxis.appendChild(timeLabel);
     }
 
-    // --- Generate Calendar Grid ---
-    days.forEach((day, dayIndex) => {
-        const dayColumn = document.createElement('div');
-        dayColumn.classList.add('day-column');
-        dayColumn.dataset.dayIndex = dayIndex; // Store day index
-
-        for (let hour = 0; hour < hours; hour++) {
-            const timeSlot = document.createElement('div');
-            timeSlot.classList.add('time-slot');
-            timeSlot.dataset.hour = hour; // Store hour
-            timeSlot.dataset.day = day;
-             timeSlot.dataset.dayIndex = dayIndex; // Also store day index here for easy access
-             timeSlot.dataset.time = `${String(hour).padStart(2, '0')}:00`; // Store formatted time
-
-            // --- Add Click Listener to Time Slots ---
-            timeSlot.addEventListener('click', () => openAddEventModal(day, dayIndex, hour));
-
-            dayColumn.appendChild(timeSlot);
+    // --- Set Dates in Calendar Header ---
+    function setCalendarHeaderDates() {
+        // Use currentWeekStart as the base
+        // Remove highlight from all header-col elements
+        const allHeaderCols = document.querySelectorAll('.header-col');
+        allHeaderCols.forEach(col => col.classList.remove('today-header'));
+        // Set date text and highlight header-col for today if in week
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(currentWeekStart);
+            d.setDate(currentWeekStart.getDate() + i);
+            d.setHours(0,0,0,0);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const label = document.getElementById('header-date-' + i);
+            if (label) {
+                label.textContent = `${yyyy}-${mm}-${dd}`;
+                // Highlight entire header-col if this is today
+                if (d.getTime() === today.getTime()) {
+                    const headerCol = label.closest('.header-col');
+                    if (headerCol) headerCol.classList.add('today-header');
+                }
+            }
         }
-        gridContent.appendChild(dayColumn);
-    });
+    }
+    setCalendarHeaderDates();
+
+    // --- Render Calendar Grid ---
+    function renderCalendarGrid() {
+        // Remove any existing now-line
+        const oldNowLine = document.querySelector('.now-line');
+        if (oldNowLine) oldNowLine.remove();
+
+        // --- Step 1: Debug if today is in the displayed week ---
+        const now = new Date();
+        const todayIndex = now.getDay();
+        const weekStart = new Date(currentWeekStart);
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        const isTodayInWeek = (now >= weekStart && now <= weekEnd);
+        console.log('[NOW LINE STEP 1] now:', now, 'currentWeekStart:', weekStart, 'weekEnd:', weekEnd, 'isTodayInWeek:', isTodayInWeek);
+
+        // --- (Grid rendering happens here, unchanged) ---
+
+
+        // --- Now-line logic runs AFTER grid rendering (deferred with setTimeout) ---
+        if (isTodayInWeek) {
+            console.log('[NOW LINE DEFER] Deferring now-line logic to after DOM update');
+            setTimeout(() => {
+                const grid = document.querySelector('.grid-content');
+                const dayColumns = grid.querySelectorAll('.day-column');
+                const colIndexes = Array.from(dayColumns).map(col => col.dataset.dayIndex);
+                console.log('[NOW LINE STEP 2] (deferred) Number of dayColumns:', dayColumns.length, 'todayIndex:', todayIndex, 'colIndexes:', colIndexes);
+                if (dayColumns && dayColumns[todayIndex]) {
+                    const todayCol = dayColumns[todayIndex];
+                    // Calculate vertical offset: minutes since midnight / (24*60) * grid height
+                    const mins = now.getHours() * 60 + now.getMinutes();
+                    const gridHeight = todayCol.offsetHeight;
+                    const y = (mins / (24 * 60)) * gridHeight;
+                    // Create the now line
+                    const nowLine = document.createElement('div');
+                    nowLine.className = 'now-line';
+                    nowLine.style.position = 'absolute';
+                    nowLine.style.left = '0';
+                    nowLine.style.right = '0';
+                    nowLine.style.top = `${y}px`;
+                    nowLine.style.pointerEvents = 'none'; // Ensure it doesn't interfere with clicks
+                    // Debug: log stacking context
+                    console.log('[NOW LINE STEP 2] (deferred) Drawing now-line at y:', y, 'gridHeight:', gridHeight, 'mins:', mins);
+                    // Ensure day column is relative
+                    todayCol.style.position = 'relative';
+                    todayCol.appendChild(nowLine);
+                    // Debug: check z-index
+                    console.log('[NOW LINE STEP 2] (deferred) Appended now-line to dayCol. nowLine z-index:', getComputedStyle(nowLine).zIndex);
+                } else {
+                    console.log('[NOW LINE STEP 2] (deferred) No valid dayColumn found for todayIndex');
+                }
+            }, 0);
+        }
+
+        console.log('renderCalendarGrid called');
+        if (!gridContent) {
+            console.error('gridContent not found!');
+            return;
+        }
+        console.log('days:', days, 'hours:', hours);
+
+        // Clear existing grid
+        while (gridContent.firstChild) {
+            gridContent.removeChild(gridContent.firstChild);
+        }
+        // Insert .time-axis-spacer as the first child of .grid-content for alignment
+        const spacer = document.createElement('div');
+        spacer.className = 'time-axis-spacer';
+        gridContent.appendChild(spacer);
+
+        days.forEach((day, dayIndex) => {
+            const dayColumn = document.createElement('div');
+            dayColumn.classList.add('day-column');
+            dayColumn.dataset.dayIndex = dayIndex;
+            // Add a data-date attribute for event rendering
+            const colDateObj = new Date(currentWeekStart);
+            colDateObj.setDate(currentWeekStart.getDate() + dayIndex);
+            const yyyy = colDateObj.getFullYear();
+            const mm = String(colDateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(colDateObj.getDate()).padStart(2, '0');
+            dayColumn.dataset.date = `${yyyy}-${mm}-${dd}`;
+
+            for (let hour = 0; hour < hours; hour++) {
+                // Create parent time-slot for each hour
+                const parentSlot = document.createElement('div');
+                parentSlot.classList.add('time-slot');
+                parentSlot.dataset.hour = hour;
+                parentSlot.dataset.day = day;
+                parentSlot.dataset.dayIndex = dayIndex;
+                parentSlot.dataset.time = `${String(hour).padStart(2, '0')}:00`;
+
+                // Create 4 child slot-quarter divs for :00, :15, :30, :45
+                for (let quarter = 0; quarter < 4; quarter++) {
+                    const mins = quarter * 15;
+                    const slotQuarter = document.createElement('div');
+                    slotQuarter.classList.add('slot-quarter');
+                    slotQuarter.classList.add(`slot-quarter-${mins}`); // e.g., slot-quarter-00, slot-quarter-15
+                    slotQuarter.dataset.hour = hour;
+                    slotQuarter.dataset.day = day;
+                    slotQuarter.dataset.dayIndex = dayIndex;
+                    slotQuarter.dataset.time = `${String(hour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+
+                    // Attach click handler to open modal with correct time
+                    slotQuarter.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Prevent bubbling to parent
+                        openAddEventModalWithMinutes(day, dayIndex, hour, mins);
+                    });
+
+                    parentSlot.appendChild(slotQuarter);
+                }
+                dayColumn.appendChild(parentSlot);
+            }
+            gridContent.appendChild(dayColumn);
+        });
+    }
+
+    // Initial render
+    renderCalendarGrid();
+
+    // --- Keep the now line updated every minute ---
+    setInterval(() => {
+        renderCalendarGrid();
+    }, 60000); // every minute
+
+    // --- Week Navigation Buttons ---
+    const navRightBtn = document.querySelector('.calendar-nav-right');
+    const navLeftBtn = document.querySelector('.calendar-nav-left');
+    if (navRightBtn) {
+        navRightBtn.addEventListener('click', function() {
+            // Move to next week
+            currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+            setCalendarHeaderDates();
+            renderCalendarGrid();
+            loadEvents();
+        });
+    }
+    if (navLeftBtn) {
+        navLeftBtn.addEventListener('click', function() {
+            // Move to previous week
+            currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+            setCalendarHeaderDates();
+            renderCalendarGrid();
+            loadEvents();
+        });
+    }
+
+    // Function to open modal specifically from a grid click (pre-filled times)
+    function openAddEventModalFromGridClick(dayIndex, startTime, endTime) {
+        modalTitleElement.textContent = 'Add New Event'; // Set title
+        modalForm.reset(); // Clear previous entries
+        modalEditEventIdInput.value = ''; // Ensure no edit ID is lingering
+
+        // Populate fields
+        modalDaySelect.value = days[dayIndex];       // Corrected: Use the select element
+        modalStartTimeInput.value = startTime;      // Corrected: Use the time input
+        modalEndTimeInput.value = endTime;        // Corrected: Use the time input
+        modalDescriptionInput.value = 'New Event';  // Corrected: Use the description input
+
+        modal.style.display = 'block'; // Show the modal
+        modalDescriptionInput.focus(); // Focus on description for quick typing
+    }
 
     // --- Modal Logic ---
+    function openAddEventModalWithMinutes(day, dayIndex, hour, mins) {
+        // Hide the delete button when adding
+        const deleteButton = document.getElementById('delete-event');
+        if (deleteButton) deleteButton.style.display = 'none';
+        modalTitleElement.textContent = 'Add New Event';
+        modalEditEventIdInput.value = '';
+        eventTitleInput.value = '';
+        eventProjectSelect.value = '';
+
+        // Set day label and index
+        if (modalDaySpan) modalDaySpan.textContent = day;
+        if (modalDayIndexInput) modalDayIndexInput.value = dayIndex;
+
+        // Compute start and end time
+        const startTime = `${String(hour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+        eventStartTimeInput.value = startTime;
+        // Use settings for default duration
+        const duration = getDefaultDuration();
+        let startMinutes = hour * 60 + mins;
+        let endMinutes = startMinutes + duration;
+        let endHour = Math.floor(endMinutes / 60);
+        let endMinute = endMinutes % 60;
+        eventEndTimeInput.value = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+
+        modal.style.display = 'block';
+        eventTitleInput.focus();
+        loadProjects();
+    }
+
     function openAddEventModal(day, dayIndex, hour) {
+    // Hide the delete button when adding
+    const deleteButton = document.getElementById('delete-event');
+    if (deleteButton) deleteButton.style.display = 'none';
         modalTitleElement.textContent = 'Add New Event'; // Set title for adding
         modalEditEventIdInput.value = ''; // Ensure edit ID is clear
         eventTitleInput.value = ''; // Clear previous title
@@ -82,7 +368,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const startTime = `${String(hour).padStart(2, '0')}:00`;
         modalDaySpan.textContent = day;
         eventStartTimeInput.value = startTime; // Store start time
-        eventEndTimeInput.value = `${String(hour + 1).padStart(2, '0')}:00`; // Store end time
+        // Use settings for default duration
+        const duration = getDefaultDuration();
+        let endHour = hour, endMinute = 0;
+        const startParts = startTime.split(':');
+        let startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+        let endMinutes = startMinutes + duration;
+        endHour = Math.floor(endMinutes / 60);
+        endMinute = endMinutes % 60;
+        eventEndTimeInput.value = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
         modalDayIndexInput.value = dayIndex; // Store day index
         modal.style.display = 'block';
         eventTitleInput.focus(); // Focus on title input
@@ -102,6 +396,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Delete event logic
+    const deleteButton = document.getElementById('delete-event');
+    if (deleteButton) {
+        deleteButton.onclick = async function() {
+            const eventId = modalEditEventIdInput.value;
+            if (!eventId) return;
+            if (!confirm('Are you sure you want to delete this event?')) return;
+
+            try {
+                const resp = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    delete currentEvents[eventId];
+                    loadEvents();
+                    modal.style.display = 'none';
+                    modalEditEventIdInput.value = '';
+                } else {
+                    alert('Failed to delete event.');
+                }
+            } catch (err) {
+                alert('Error deleting event.');
+            }
+        };
+    }
+
+    // Save event logic
     saveEventButton.addEventListener('click', async () => {
         const title = eventTitleInput.value.trim();
         const start = eventStartTimeInput.value; // e.g., "09:00"
@@ -114,10 +433,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (!projectId) {
-            alert('Please select a project.');
-            return;
-        }
+        // If no project selected, assign to 'Others' by default
+        let finalProjectId = projectId || 'others-project-id';
 
         // --- Time Validation ---
         const startMinutes = timeToMinutes(start);
@@ -128,20 +445,37 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Basic event object - adjust structure as needed
+        // Compute the date string for this event
+        const eventDateObj = new Date(currentWeekStart);
+        eventDateObj.setDate(currentWeekStart.getDate() + dayIndex);
+        const yyyy = eventDateObj.getFullYear();
+        const mm = String(eventDateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(eventDateObj.getDate()).padStart(2, '0');
+        const date = `${yyyy}-${mm}-${dd}`;
+        // Basic event object - now includes date
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            alert('Could not determine event date.');
+            return;
+        }
         const newEvent = {
             title: title,
             dayIndex: dayIndex, // 0 = Sun, 1 = Mon, ...
+            date: date,         // yyyy-mm-dd
             start: start,       // e.g., "09:00"
             end: end,           // e.g., "10:00"
-            projectId: projectId, // Add project ID
+            projectId: finalProjectId, // Use final project ID (defaults to 'Others')
         };
+
+        // If editing, preserve the original event ID and date if possible
+        const eventIdToUpdate = modalEditEventIdInput.value;
+        const isEditing = !!eventIdToUpdate;
+        if (isEditing && currentEvents[eventIdToUpdate] && currentEvents[eventIdToUpdate].date) {
+            newEvent.date = currentEvents[eventIdToUpdate].date;
+        }
 
         console.log("Saving event:", newEvent);
 
-         // --- Send event data to backend ---
-        const eventIdToUpdate = modalEditEventIdInput.value;
-        const isEditing = !!eventIdToUpdate;
+        // --- Send event data to backend ---
         const url = isEditing ? `/api/events/${eventIdToUpdate}` : '/api/events';
         const method = isEditing ? 'PUT' : 'POST';
 
@@ -154,39 +488,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify(newEvent),
             });
             if (!response.ok) {
-                 throw new Error(`HTTP error! status: ${response.status}`);
-             }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const result = await response.json();
             console.log(isEditing ? 'Event updated:' : 'Event saved:', result);
 
-             // Success! Close modal and reload events to show the new one
-             modalEditEventIdInput.value = ''; // Clear edit ID
-             modal.style.display = 'none';
-             loadEvents(); // Refresh the calendar view
+            // --- Update IndexedDB ---
+            await db.events.put(result);
 
+            // Success! Close modal and reload events to show the new one
+            modalEditEventIdInput.value = ''; // Clear edit ID
+            modal.style.display = 'none';
+            loadEvents(); // Refresh the calendar view
         } catch (error) {
             console.error('Error saving event:', error);
             alert('Failed to save event. See console for details.');
         }
-
-
     });
 
-    // Helper function to convert time to minutes
-    function timeToMinutes(time) {
-        const [hours, minutes] = time.split(':').map(Number);
-        return hours * 60 + minutes;
-    }
+// Helper function to convert time to minutes
+function timeToMinutes(time) {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+}
 
-    // --- Function to Add Event Visually ---
-    function addEventToCalendar(eventData) {
+// --- Function to Add Event Visually ---
+function addEventToCalendar(eventData) {
+    console.log("Adding event to calendar:", eventData); // Log the data being added
+    // Find the correct day column and time slot
         console.log("Adding event to calendar:", eventData); // Log the data being added
         // Find the correct day column and time slot
-        const dayColumn = gridContent.querySelector(`.day-column[data-day-index="${eventData.dayIndex}"]`);
-        if (!dayColumn) {
-            console.error("Could not find day column for index:", eventData.dayIndex);
-            return;
-        }
+    // Use eventData.date to match the correct column for rendering
+    let dayColumn = null;
+    if (eventData.date) {
+        // Find column by date attribute if present
+        dayColumn = gridContent.querySelector(`.day-column[data-date="${eventData.date}"]`);
+    } else {
+        // Fallback to dayIndex for legacy events
+        dayColumn = gridContent.querySelector(`.day-column[data-day-index="${eventData.dayIndex}"]`);
+    }
+    if (!dayColumn) {
+        console.error("Could not find day column for event:", eventData);
+        return;
+    }
 
         const startMinutes = timeToMinutes(eventData.start);
         const endMinutes = timeToMinutes(eventData.end);
@@ -222,6 +566,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Function to Open Modal for Editing Existing Event ---
     function openEditEventModal(eventId) {
+    // Show the delete button when editing
+    const deleteButton = document.getElementById('delete-event');
+    if (deleteButton) deleteButton.style.display = 'inline-block';
         const eventData = currentEvents[eventId];
         if (!eventData) {
             console.error("Event data not found for ID:", eventId);
@@ -273,6 +620,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const li = document.createElement('li');
             li.dataset.projectId = project.id; // Store ID if needed later
 
+            // Add a space element before the color indicator
+            const spaceElem = document.createElement('span');
+            spaceElem.className = 'space-before-color';
+            spaceElem.textContent = ' ';
+            li.appendChild(spaceElem);
             // Add color indicator
             const colorIndicator = document.createElement('span');
             colorIndicator.classList.add('project-color-indicator');
@@ -365,16 +717,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch('/api/events');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const events = await response.json();
-
             // Clear existing events from grid and local store
             gridContent.querySelectorAll('.event').forEach(e => e.remove());
-            currentEvents = {}; // Clear the local store
-
-            // Populate local store and add events to calendar
+            currentEvents = {};
             events.forEach(event => {
-                currentEvents[event.id] = event; // Store by ID
+                currentEvents[event.id] = event;
                 addEventToCalendar(event);
             });
+            console.log('[Backend] Loaded events from backend:', events.length);
         } catch (error) {
             console.error('Error loading events:', error);
             // Optionally display a message to the user
@@ -382,14 +732,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Export CSV Logic ---
-     exportButton.addEventListener('click', () => {
-         // Trigger download by redirecting to the export URL
-         window.location.href = '/api/export/csv';
-     });
+    exportButton.addEventListener('click', async () => {
+        // Check if there is any event data to export
+        let eventsToExport = [];
+        try {
+            eventsToExport = await db.events.toArray();
+        } catch (e) {
+            // Fallback: if IndexedDB fails, try in-memory
+            eventsToExport = Object.values(currentEvents);
+        }
+        if (!eventsToExport || eventsToExport.length === 0) {
+            alert('No data to export.');
+            return;
+        }
+        // Trigger download by redirecting to the export URL
+        window.location.href = '/api/export/csv';
+    });
 
     loadProjects(); // Initial load of projects
 
     // Initial load of events when the page is ready
     loadEvents();
 
-});
+    // Calculate initial column width after rendering
+    calculateDayColumnWidth();
+
+    // Recalculate column width on window resize
+    window.addEventListener('resize', calculateDayColumnWidth);
+
+}); // End DOMContentLoaded

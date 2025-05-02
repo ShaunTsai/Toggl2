@@ -1,1 +1,2 @@
 Flask
+# Dexie.js is included as a frontend dependency for IndexedDB support (see static/dexie.min.js)

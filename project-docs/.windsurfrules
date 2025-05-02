@@ -1,0 +1,85 @@
+ "// Awesome WindsurfRules
+// A curated list of awesome global_rules and workspace_rules files for enhancing Windsurf experience
+
+// General guidelines
+Always use Markdown for documentation and README files
+Maintain the existing structure of the README.md file
+
+// README.md structure
+Maintain the following structure in the README.md file:
+  1. Title and Awesome badge
+  2. Fork information and differences
+  3. Short description
+  4. "Why Use Rules in Windsurf?" section
+     - Benefits of Global Rules
+     - Benefits of Workspace Rules
+  5. Content
+     - Global Rules
+     - Workspace Rules
+  6. Directories
+  7. How to Use section
+  8. Contributing section
+  9. License section
+
+// Organization of rules
+Organize rules into two main directories:
+  1. global_rules/
+     - language/
+     - commit-message/
+     - code-style/
+     - documentation/
+     - security/
+     - performance/
+  2. workspace_rules/
+     - Frontend Frameworks and Libraries
+     - Backend and Full-Stack
+     - Mobile Development
+     - CSS and Styling
+     - State Management
+     - Database and API
+     - Testing
+     - Build Tools and Development
+     - Language-Specific
+     - Other
+
+// Naming and formatting
+For global rules:
+  - Use descriptive folder names that indicate the rule category
+  - Each category should contain a global_rules.md file
+For workspace rules:
+  - Use pattern: 'technology-focus-windsurfrules-prompt-file'
+  - Include a .windsurfrules file in each folder
+Maintain alphabetical order within each category in the README.md file
+
+// Content guidelines
+Global rules should:
+  - Apply across all projects
+  - Focus on organization-wide standards
+  - Be clear and enforceable
+Workspace rules should:
+  - Focus on project-specific instructions
+  - Include framework-specific best practices
+  - Provide context about project architecture
+
+// Documentation
+Each rules folder should have:
+  - A clear README.md explaining the purpose
+  - Examples of rule application
+  - Credits to original authors if forked/adapted
+
+// Maintenance
+Keep README.md updated when adding new rules
+Ensure all links are relative and working
+Review and update categorization regularly
+Document any major changes or reorganizations
+
+// Best practices
+Follow the global language rules (English)
+Use the global commit message format
+Keep rules focused and specific
+Cross-reference related rules when helpful
+Regular review and cleanup of deprecated rules"
+
+//Rules for Implementing changes
+1. Always breal down anything you wish to implement into small, atomic steps
+2. Always ask for permission before implementing any steps

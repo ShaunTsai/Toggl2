@@ -26,6 +26,7 @@ events_data = {
     #     "projectId": "proj1"
     # }
 }
+
 projects_data = [
     # Example initial project
     # {
@@ -34,6 +35,31 @@ projects_data = [
     #     "color": "#F44336"
     # }
 ]
+
+import threading
+
+# --- Ensure default 'Others' project exists ---
+OTHERS_PROJECT_ID = 'others-project-id'
+def ensure_others_project():
+    global projects_data
+    if not any(p['id'] == OTHERS_PROJECT_ID for p in projects_data):
+        projects_data.insert(0, {
+            'id': OTHERS_PROJECT_ID,
+            'name': 'Others',
+            'color': '#757575'  # Grey
+        })
+# Call once at startup and before returning project list
+ensure_others_project()
+
+projects_data = [
+    # Example initial project
+    # {
+    #     "id": "proj1",
+    #     "name": "Project Alpha",
+    #     "color": "#F44336"
+    # }
+]
+
 
 @app.route('/')
 def index():
@@ -63,17 +89,33 @@ def add_event():
     event_data = request.json
     print(f"Received event: {event_data}") # Keep for debugging
     # Basic validation (add more as needed)
-    if not all(k in event_data for k in ('title', 'dayIndex', 'start', 'end', 'projectId')):
+    if not all(k in event_data for k in ('title', 'dayIndex', 'start', 'end')):
+        # Note: 'date' is now expected but fallback is handled below
         return jsonify({"error": "Missing required event fields"}), 400
 
+    # Assign to 'Others' if projectId is missing or empty
+    project_id = event_data.get('projectId')
+    if not project_id:
+        project_id = OTHERS_PROJECT_ID
+
     new_event_id = str(uuid.uuid4()) # Generate unique ID
+    # Determine date (prefer explicit, else compute from current week and dayIndex)
+    event_date = event_data.get('date')
+    if not event_date:
+        # Compute date string from dayIndex and today as base (for legacy clients)
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        week_start = today - timedelta(days=today.weekday()) # Monday as start
+        event_date_obj = week_start + timedelta(days=event_data['dayIndex'])
+        event_date = event_date_obj.strftime('%Y-%m-%d')
     newEvent = {
         "id": new_event_id,
         "title": event_data['title'],
         "dayIndex": event_data['dayIndex'],
+        "date": event_date,
         "start": event_data['start'],
         "end": event_data['end'], # Store the end time
-        "projectId": event_data['projectId']
+        "projectId": project_id
     }
     events_data[new_event_id] = newEvent # Add to dictionary
     return jsonify(newEvent), 201
@@ -87,17 +129,32 @@ def update_event(event_id):
     print(f"Updating event {event_id} with: {update_data}")
 
     # Basic validation
-    if not all(k in update_data for k in ('title', 'dayIndex', 'start', 'end', 'projectId')):
+    if not all(k in update_data for k in ('title', 'dayIndex', 'start', 'end')):
+        # Note: 'date' is now expected but fallback is handled below
         return jsonify({"error": "Missing required event fields for update"}), 400
+
+    # Assign to 'Others' if projectId is missing or empty
+    project_id = update_data.get('projectId')
+    if not project_id:
+        project_id = OTHERS_PROJECT_ID
 
     # Update the stored event (ensure ID remains the same)
     updated_event = events_data[event_id]
+    # Determine date (prefer explicit, else compute from current week and dayIndex)
+    update_date = update_data.get('date')
+    if not update_date:
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        week_start = today - timedelta(days=today.weekday())
+        update_date_obj = week_start + timedelta(days=update_data['dayIndex'])
+        update_date = update_date_obj.strftime('%Y-%m-%d')
     updated_event.update({
         "title": update_data['title'],
         "dayIndex": update_data['dayIndex'], # Note: Allowing day change might need UI adjustments
+        "date": update_date,
         "start": update_data['start'],
         "end": update_data['end'],
-        "projectId": update_data['projectId']
+        "projectId": project_id
     })
     # events_data[event_id] = updated_event # No need, dictionary holds reference
 
@@ -106,6 +163,7 @@ def update_event(event_id):
 # --- Project API Endpoints ---
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
+    ensure_others_project()
     return jsonify(projects_data)
 
 @app.route('/api/projects', methods=['POST'])
@@ -131,6 +189,13 @@ def add_project():
     projects_data.append(new_project)
     print(f"Added project: {new_project}")
     return jsonify({"status": "success", "project": new_project}), 201
+@app.route('/api/events/<event_id>', methods=['DELETE'])
+def delete_event(event_id):
+    if event_id not in events_data:
+        return jsonify({"error": "Event not found"}), 404
+    del events_data[event_id]
+    return jsonify({"status": "success", "deleted": event_id}), 200
+
 # --- End Project API ---
 
 
@@ -143,7 +208,7 @@ def export_csv():
     project_map = {p['id']: p['name'] for p in projects_data} # Map IDs to names for export
 
     # Define base fieldnames, add projectName dynamically if any event has it
-    fieldnames = ['title', 'dayIndex', 'start', 'end', 'projectId', 'projectName'] # Add projectId and projectName
+    fieldnames = ['title', 'dayIndex', 'date', 'start', 'end', 'projectId', 'projectName'] # Add projectId, projectName, and date
 
     writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore') # Ignore extra fields if any
     writer.writeheader()
@@ -165,4 +230,4 @@ def export_csv():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5050)
