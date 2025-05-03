@@ -59,6 +59,27 @@ Here are my initial thoughts: This is an app that mocks Toggl Tracker, but keepi
   - The app can function offline, and user data persists across sessions and browser restarts.
 - **IndexedDB Structure:**
   - Uses a single `events` table with fields for id, title, day index, date, start/end times, and project association.
+
+---
+
+## Major Changes & Reorganizations (2025-05-04)
+
+### Frontend-Only CSV Export
+- The Export to CSV feature now generates and downloads the CSV file entirely in the browser using local IndexedDB data.
+- No event data is sent to or retrieved from the backend during export. This ensures privacy and data ownership.
+
+### Removal of Backend Event Storage
+- All legacy backend event storage and callback code has been removed from both the frontend and backend.
+- The backend no longer stores or manages event data; all event CRUD operations are local-only.
+
+### Local-Only Event Management
+- All event creation, editing, deletion, and export are managed via Dexie.js in the user's browser.
+- The application can function fully offline, and user data persists across sessions.
+
+### Documentation & Best Practices
+- All major changes and reorganizations are now documented in this PRD for traceability and future reference.
+- Regular review and cleanup of deprecated rules and code is encouraged as part of ongoing best practices.
+
   - All CRUD operations (create, read, update, delete) are performed locally for maximum speed and reliability.
 
 ### Export CSV Logic Improvements

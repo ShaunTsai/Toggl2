@@ -286,6 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Keep the now line updated every minute ---
     setInterval(() => {
         renderCalendarGrid();
+        loadEvents(); // Ensure events are reloaded after grid re-render (now-line update)
     }, 60000); // every minute
 
     // --- Week Navigation Buttons ---
@@ -308,6 +309,25 @@ document.addEventListener('DOMContentLoaded', function() {
             renderCalendarGrid();
             loadEvents();
         });
+    }
+
+    // --- Load Existing Events on Page Load ---
+    async function loadEvents() {
+        try {
+            // Load all events from IndexedDB (Dexie.js)
+            const events = await db.events.toArray();
+            // Clear existing events from grid and local store
+            gridContent.querySelectorAll('.event').forEach(e => e.remove());
+            currentEvents = {};
+            events.forEach(event => {
+                currentEvents[event.id] = event;
+                addEventToCalendar(event);
+            });
+            console.log('[IndexedDB] Loaded events from local DB:', events.length);
+        } catch (error) {
+            console.error('Error loading events from IndexedDB:', error);
+            // Optionally display a message to the user
+        }
     }
 
     // Function to open modal specifically from a grid click (pre-filled times)
@@ -709,41 +729,34 @@ function addEventToCalendar(eventData) {
         }
     });
 
-    // --- Load Existing Events on Page Load ---
-    async function loadEvents() {
-        try {
-            // Load all events from IndexedDB (Dexie.js)
-            const events = await db.events.toArray();
-            // Clear existing events from grid and local store
-            gridContent.querySelectorAll('.event').forEach(e => e.remove());
-            currentEvents = {};
-            events.forEach(event => {
-                currentEvents[event.id] = event;
-                addEventToCalendar(event);
-            });
-            console.log('[IndexedDB] Loaded events from local DB:', events.length);
-        } catch (error) {
-            console.error('Error loading events from IndexedDB:', error);
-            // Optionally display a message to the user
-        }
-    }
 
-    // --- Export CSV Logic ---
     exportButton.addEventListener('click', async () => {
-        // Check if there is any event data to export
-        let eventsToExport = [];
-        try {
-            eventsToExport = await db.events.toArray();
-        } catch (e) {
-            // Fallback: if IndexedDB fails, try in-memory
-            eventsToExport = Object.values(currentEvents);
-        }
-        if (!eventsToExport || eventsToExport.length === 0) {
-            alert('No data to export.');
-            return;
-        }
-        // Trigger download by redirecting to the export URL
-        window.location.href = '/api/export/csv';
+        const csvRows = [];
+        const headerRow = ['Event ID', 'Title', 'Project', 'Start Time', 'End Time', 'Day'];
+        csvRows.push(headerRow.map(f => `"${f}"`).join(','));
+
+        Object.values(currentEvents).forEach(ev => {
+            const row = [];
+            row.push(`"${ev.id}"`);
+            row.push(`"${ev.title}"`);
+            row.push(`"${projectMap[ev.projectId] || ''}"`);
+            row.push(`"${ev.start}"`);
+            row.push(`"${ev.end}"`);
+            row.push(`"${days[ev.dayIndex]}"`);
+            csvRows.push(row.join(','));
+        });
+
+        const csvContent = csvRows.join('\r\n');
+        // Download CSV
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'toggl2_events_export.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     });
 
     loadProjects(); // Initial load of projects
