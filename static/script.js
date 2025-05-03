@@ -311,32 +311,81 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Load Existing Events on Page Load ---
-    async function loadEvents() {
-        try {
-            // Load all events from IndexedDB (Dexie.js)
-            const events = await db.events.toArray();
-            // Clear existing events from grid and local store
-            gridContent.querySelectorAll('.event').forEach(e => e.remove());
-            currentEvents = {};
-            events.forEach(event => {
-                currentEvents[event.id] = event;
-                addEventToCalendar(event);
+// --- Load Existing Events on Page Load ---
+async function loadEvents() {
+    try {
+        // Load all events from IndexedDB (Dexie.js)
+        const events = await db.events.toArray();
+        // Clear existing events from grid and local store
+        gridContent.querySelectorAll('.event').forEach(e => e.remove());
+        currentEvents = {};
+        // Step 1: Group events by day for overlap processing
+        const eventsByDay = {};
+        events.forEach(event => {
+            currentEvents[event.id] = event;
+            if (!eventsByDay[event.date]) eventsByDay[event.date] = [];
+            eventsByDay[event.date].push(event);
+        });
+        // Step 2: Detect overlap groups for each day
+        Object.entries(eventsByDay).forEach(([date, dayEvents]) => {
+            // Sort events by start time
+            const sorted = dayEvents.slice().sort((a, b) => a.start.localeCompare(b.start));
+            const overlapGroups = [];
+            let group = [];
+            let groupEnd = null;
+            sorted.forEach(event => {
+                const eventStart = event.start;
+                const eventEnd = event.end;
+                if (!group.length) {
+                    group.push(event);
+                    groupEnd = eventEnd;
+                } else if (eventStart < groupEnd) {
+                    group.push(event);
+                    if (eventEnd > groupEnd) groupEnd = eventEnd;
+                } else {
+                    overlapGroups.push(group);
+                    group = [event];
+                    groupEnd = eventEnd;
+                }
             });
-            console.log('[IndexedDB] Loaded events from local DB:', events.length);
-        } catch (error) {
-            console.error('Error loading events from IndexedDB:', error);
-            // Optionally display a message to the user
-        }
+            if (group.length) overlapGroups.push(group);
+            console.log(`[Overlap] Overlap groups for ${date}:`, overlapGroups);
+
+            // Step 3: Assign overlapColumn and overlapColumnCount for each event in each group
+            overlapGroups.forEach((grp, groupIdx) => {
+                const colCount = grp.length;
+                grp.forEach((event, idx) => {
+                    event.overlapColumn = idx;
+                    event.overlapColumnCount = colCount;
+                    // Log assignment for debugging
+                    console.log(`[Overlap] ${date} - Event "${event.title}": column ${idx} of ${colCount}`);
+                });
+            });
+        });
+
+        // After assigning overlap properties, render events
+        Object.values(eventsByDay).forEach(dayEvents => {
+            dayEvents.forEach(event => addEventToCalendar(event));
+        });
+        // Still log the groups by day for debugging
+        console.log('[Overlap] Events grouped by day:', eventsByDay);
+        console.log('[IndexedDB] Loaded events from local DB:', events.length);
+    } catch (error) {
+        console.error('Error loading events from IndexedDB:', error);
+        // Optionally display a message to the user
     }
+}
 
     // Function to open modal specifically from a grid click (pre-filled times)
     function openAddEventModalFromGridClick(dayIndex, startTime, endTime) {
         modalTitleElement.textContent = 'Add New Event'; // Set title
         modalForm.reset(); // Clear previous entries
         modalEditEventIdInput.value = ''; // Ensure no edit ID is lingering
-
         // Populate fields
+    // Populate fields
+    modalDaySelect.value = days[dayIndex];       // Corrected: Use the select element
+    modalStartTimeInput.value = startTime;      // Corrected: Use the time input
+    modalEndTimeInput.value = endTime;        // Corrected: Use the time input
         modalDaySelect.value = days[dayIndex];       // Corrected: Use the select element
         modalStartTimeInput.value = startTime;      // Corrected: Use the time input
         modalEndTimeInput.value = endTime;        // Corrected: Use the time input
@@ -533,9 +582,6 @@ function timeToMinutes(time) {
 function addEventToCalendar(eventData) {
     console.log("Adding event to calendar:", eventData); // Log the data being added
     // Find the correct day column and time slot
-        console.log("Adding event to calendar:", eventData); // Log the data being added
-        // Find the correct day column and time slot
-    // Use eventData.date to match the correct column for rendering
     let dayColumn = null;
     if (eventData.date) {
         // Find column by date attribute if present
@@ -549,43 +595,51 @@ function addEventToCalendar(eventData) {
         return;
     }
 
-        const startMinutes = timeToMinutes(eventData.start);
-        const endMinutes = timeToMinutes(eventData.end);
-        const durationMinutes = endMinutes - startMinutes;
+    const startMinutes = timeToMinutes(eventData.start);
+    const endMinutes = timeToMinutes(eventData.end);
+    const durationMinutes = endMinutes - startMinutes;
 
-        const topPosition = (startMinutes / 60) * slotHeight; // Position in pixels
-        const eventHeight = (durationMinutes / 60) * slotHeight; // Height in pixels
+    const topPosition = (startMinutes / 60) * slotHeight; // Position in pixels
+    const eventHeight = (durationMinutes / 60) * slotHeight; // Height in pixels
 
-        const eventElement = document.createElement('div');
-        eventElement.classList.add('event');
-        eventElement.textContent = eventData.title;
-
-        eventElement.style.top = `${topPosition}px`;
-        eventElement.style.height = `${eventHeight}px`;
-        eventElement.dataset.eventId = eventData.id; // Store event ID
-
-        // Apply project color and ensure text readability
-        // *** Check if event.projectColor exists before applying ***
-        if (eventData.projectColor) {
-            console.log('Rendering event:', eventData.title, 'with project color:', eventData.projectColor); // DEBUG
-            eventElement.style.backgroundColor = eventData.projectColor;
-            eventElement.style.color = getContrastYIQ(eventData.projectColor); // Adjust text color
-        } else {
-            console.warn('Event has no project color:', eventData.title); // DEBUG
-            // Keep default blue or set another default if needed
-        }
-
-        dayColumn.appendChild(eventElement);
-
-        // --- Add Click Listener for Editing ---
-        eventElement.addEventListener('click', () => openEditEventModal(eventData.id));
+    // --- Step 4: Calculate left and width for overlap rendering ---
+    let left = 0;
+    let width = '100%';
+    if (
+        typeof eventData.overlapColumn === 'number' &&
+        typeof eventData.overlapColumnCount === 'number' &&
+        eventData.overlapColumnCount > 1
+    ) {
+        // Calculate width and left position as a percentage
+        width = (100 / eventData.overlapColumnCount) + '%';
+        left = (100 / eventData.overlapColumnCount) * eventData.overlapColumn + '%';
     }
 
-    // --- Function to Open Modal for Editing Existing Event ---
+    const eventElement = document.createElement('div');
+    eventElement.classList.add('event');
+    eventElement.textContent = eventData.title;
+
+    eventElement.style.top = `${topPosition}px`;
+    eventElement.style.height = `${eventHeight}px`;
+    eventElement.style.setProperty('--event-left', left);
+    eventElement.style.setProperty('--event-width', width);
+    eventElement.style.position = 'absolute';
+    eventElement.dataset.eventId = eventData.id;
+
+    // Apply project color and ensure text readability
+    if (eventData.projectColor) {
+        eventElement.style.backgroundColor = eventData.projectColor;
+        eventElement.style.color = getContrastYIQ(eventData.projectColor);
+    }
+
+    dayColumn.appendChild(eventElement);
+
+    // --- Add Click Listener for Editing ---
+    eventElement.addEventListener('click', () => openEditEventModal(eventData.id));
+}
+
+    // Edit event logic
     function openEditEventModal(eventId) {
-    // Show the delete button when editing
-    const deleteButton = document.getElementById('delete-event');
-    if (deleteButton) deleteButton.style.display = 'inline-block';
         const eventData = currentEvents[eventId];
         if (!eventData) {
             console.error("Event data not found for ID:", eventId);
@@ -732,11 +786,19 @@ function addEventToCalendar(eventData) {
 
     exportButton.addEventListener('click', async () => {
         const csvRows = [];
-        const headerRow = ['Event ID', 'Title', 'Project', 'Start Time', 'End Time', 'Day'];
+        const headerRow = ['Date', 'Event ID', 'Title', 'Project', 'Start Time', 'End Time', 'Day'];
         csvRows.push(headerRow.map(f => `"${f}"`).join(','));
 
+        // Build a map of projectId to project name for export
+        let projectMap = {};
+        if (window.loadedProjects && Array.isArray(window.loadedProjects)) {
+            window.loadedProjects.forEach(proj => {
+                projectMap[proj.id] = proj.name;
+            });
+        }
         Object.values(currentEvents).forEach(ev => {
             const row = [];
+            row.push(`"${ev.date || ''}"`);
             row.push(`"${ev.id}"`);
             row.push(`"${ev.title}"`);
             row.push(`"${projectMap[ev.projectId] || ''}"`);

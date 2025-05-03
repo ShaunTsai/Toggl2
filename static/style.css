@@ -431,10 +431,12 @@ h1 {
 
 
 .event {
-    position: absolute;
-    left: 2px; /* Small padding from left edge */
-    right: 2px; /* Small padding from right edge */
-    background-color: #4a90e2; /* Blue fallback, but allow inline style to override */
+    position: absolute !important;
+    left: unset;
+    width: unset;
+    /* Remove margin-left/right for perfect fit */
+    min-width: 20px;
+    background-color: #4a90e2;
     color: white;
     border-radius: 4px;
     padding: 2px 5px;
@@ -442,12 +444,19 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    cursor: default; /* Normal cursor for events */
-    z-index: 1; /* Events appear above time slots */
+    cursor: default;
+    z-index: 1;
     box-sizing: border-box;
-    border: 1px solid #357abd; /* Slightly darker border */
+    border: 1px solid #357abd;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
+
+.event[style] {
+    left: var(--event-left, unset) !important;
+    width: var(--event-width, unset) !important;
+    position: absolute !important;
+}
+
 
 /* --- Now Line --- */
 .now-line {
