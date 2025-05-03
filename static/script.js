@@ -405,17 +405,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!confirm('Are you sure you want to delete this event?')) return;
 
             try {
-                const resp = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
-                if (resp.ok) {
-                    delete currentEvents[eventId];
-                    loadEvents();
-                    modal.style.display = 'none';
-                    modalEditEventIdInput.value = '';
-                } else {
-                    alert('Failed to delete event.');
-                }
+                // Delete from IndexedDB
+                await db.events.delete(eventId);
+                delete currentEvents[eventId];
+                loadEvents();
+                modal.style.display = 'none';
+                modalEditEventIdInput.value = '';
             } catch (err) {
-                alert('Error deleting event.');
+                alert('Error deleting event locally.');
             }
         };
     }
@@ -457,6 +454,14 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Could not determine event date.');
             return;
         }
+        // Find the color for the selected project
+        let projectColor = '#4a90e2'; // Default blue if not found
+        if (window.loadedProjects && Array.isArray(window.loadedProjects)) {
+            const proj = window.loadedProjects.find(p => p.id === finalProjectId);
+            if (proj && proj.color) {
+                projectColor = proj.color;
+            }
+        }
         const newEvent = {
             title: title,
             dayIndex: dayIndex, // 0 = Sun, 1 = Mon, ...
@@ -464,6 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
             start: start,       // e.g., "09:00"
             end: end,           // e.g., "10:00"
             projectId: finalProjectId, // Use final project ID (defaults to 'Others')
+            projectColor: projectColor
         };
 
         // If editing, preserve the original event ID and date if possible
@@ -475,34 +481,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         console.log("Saving event:", newEvent);
 
-        // --- Send event data to backend ---
-        const url = isEditing ? `/api/events/${eventIdToUpdate}` : '/api/events';
-        const method = isEditing ? 'PUT' : 'POST';
-
         try {
-            const response = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newEvent),
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            // If editing, preserve the original event ID
+            if (isEditing) {
+                newEvent.id = eventIdToUpdate;
+            } else {
+                // Assign a unique ID for new events (timestamp-based)
+                newEvent.id = Date.now().toString();
             }
-            const result = await response.json();
-            console.log(isEditing ? 'Event updated:' : 'Event saved:', result);
-
-            // --- Update IndexedDB ---
-            await db.events.put(result);
+            // Save or update the event in IndexedDB
+            await db.events.put(newEvent);
+            console.log(isEditing ? 'Event updated locally:' : 'Event saved locally:', newEvent);
 
             // Success! Close modal and reload events to show the new one
-            modalEditEventIdInput.value = ''; // Clear edit ID
+            modalEditEventIdInput.value = '';
             modal.style.display = 'none';
             loadEvents(); // Refresh the calendar view
         } catch (error) {
-            console.error('Error saving event:', error);
-            alert('Failed to save event. See console for details.');
+            console.error('Error saving event to IndexedDB:', error);
+            alert('Failed to save event locally. See console for details.');
         }
     });
 
@@ -598,6 +595,7 @@ function addEventToCalendar(eventData) {
             const response = await fetch('/api/projects');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const projects = await response.json();
+            window.loadedProjects = projects; // Make available globally for event saving
             console.log('Fetched projects:', projects); // DEBUG: Log fetched projects
             renderProjects(projects); // Update UI
             return projects; // Return projects for use elsewhere if needed
@@ -714,9 +712,8 @@ function addEventToCalendar(eventData) {
     // --- Load Existing Events on Page Load ---
     async function loadEvents() {
         try {
-            const response = await fetch('/api/events');
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const events = await response.json();
+            // Load all events from IndexedDB (Dexie.js)
+            const events = await db.events.toArray();
             // Clear existing events from grid and local store
             gridContent.querySelectorAll('.event').forEach(e => e.remove());
             currentEvents = {};
@@ -724,9 +721,9 @@ function addEventToCalendar(eventData) {
                 currentEvents[event.id] = event;
                 addEventToCalendar(event);
             });
-            console.log('[Backend] Loaded events from backend:', events.length);
+            console.log('[IndexedDB] Loaded events from local DB:', events.length);
         } catch (error) {
-            console.error('Error loading events:', error);
+            console.error('Error loading events from IndexedDB:', error);
             // Optionally display a message to the user
         }
     }

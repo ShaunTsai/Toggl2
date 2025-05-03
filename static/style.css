@@ -434,7 +434,7 @@ h1 {
     position: absolute;
     left: 2px; /* Small padding from left edge */
     right: 2px; /* Small padding from right edge */
-    background-color: #4a90e2; /* Blue background */
+    background-color: #4a90e2; /* Blue fallback, but allow inline style to override */
     color: white;
     border-radius: 4px;
     padding: 2px 5px;

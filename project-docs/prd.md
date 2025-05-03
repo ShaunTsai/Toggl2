@@ -47,3 +47,33 @@ This application is a streamlined time-tracking tool inspired by Toggl Tracker, 
 
 **Drafted Foundation:**
 Here are my initial thoughts: This is an app that mocks Toggl Tracker, but keeping only the essential functionalities. Instead of a subscription model, you enable users to download the tracked time usage for future analysis as CSV files. You will also allow users to upload CSV files of previous record to continue tracking the tasks.
+
+---
+
+## Features Added (2025-05-01/02 Session)
+
+### Core Feature: Local Storage with Dexie.js
+- **Event Data Stored Locally:**
+  - All time entries and events are stored in the user's browser using IndexedDB, managed via the Dexie.js library.
+  - This ensures full data ownership and privacy—no event data is sent to external servers.
+  - The app can function offline, and user data persists across sessions and browser restarts.
+- **IndexedDB Structure:**
+  - Uses a single `events` table with fields for id, title, day index, date, start/end times, and project association.
+  - All CRUD operations (create, read, update, delete) are performed locally for maximum speed and reliability.
+
+### Export CSV Logic Improvements
+- **Export Button Alert:**
+  - The export CSV button now checks for the presence of events before attempting export.
+  - If no events exist, the user receives a pop-up alert instead of being redirected to a blank or error page.
+  - This prevents confusion and accidental navigation away from the app.
+
+### User Experience Enhancements
+- **No Data Loss on Export:**
+  - Export logic ensures users remain on the current page if there is nothing to export, minimizing risk of memory loss or accidental state changes.
+- **Fallbacks for Data Retrieval:**
+  - If IndexedDB is unavailable, the app attempts to use in-memory data to determine export eligibility.
+
+### Technical Stack Note
+- **Dexie.js** is now a core dependency for local data management and should be referenced in all future development and documentation.
+
+---
