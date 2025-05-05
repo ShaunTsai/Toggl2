@@ -464,7 +464,20 @@ async function loadEvents() {
 
         // After assigning overlap properties, render events
         Object.values(eventsByDay).forEach(dayEvents => {
-            dayEvents.forEach(event => addEventToCalendar(event));
+            dayEvents.forEach(event => {
+                // Ensure projectColor is set correctly for this event
+                if (!event.projectColor) {
+                    let color = '#bdbdbd'; // Default for Others
+                    if (window.loadedProjects && Array.isArray(window.loadedProjects)) {
+                        const proj = window.loadedProjects.find(p => p.id === event.projectId);
+                        if (proj && proj.color) {
+                            color = proj.color;
+                        }
+                    }
+                    event.projectColor = color;
+                }
+                addEventToCalendar(event);
+            });
         });
         // Still log the groups by day for debugging
         console.log('[Overlap] Events grouped by day:', eventsByDay);
@@ -496,9 +509,9 @@ async function loadEvents() {
 
     // --- Modal Logic ---
     function openAddEventModalWithMinutes(day, dayIndex, hour, mins) {
-        // Hide the delete button when adding
-        const deleteButton = document.getElementById('delete-event');
-        if (deleteButton) deleteButton.style.display = 'none';
+    // Hide the delete button when adding
+    const deleteButton = document.getElementById('delete-event');
+    if (deleteButton) deleteButton.style.display = 'none';
         modalTitleElement.textContent = 'Add New Event';
         modalEditEventIdInput.value = '';
         eventTitleInput.value = '';
@@ -519,9 +532,18 @@ async function loadEvents() {
         let endMinute = endMinutes % 60;
         eventEndTimeInput.value = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
 
+        // Repopulate project dropdown from window.loadedProjects
+        eventProjectSelect.innerHTML = '<option value="">-- Select Project --</option>';
+        if (window.loadedProjects && Array.isArray(window.loadedProjects)) {
+            window.loadedProjects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id;
+                option.textContent = project.name;
+                eventProjectSelect.appendChild(option);
+            });
+        }
         modal.style.display = 'block';
         eventTitleInput.focus();
-        loadProjects();
     }
 
     function openAddEventModal(day, dayIndex, hour) {
@@ -758,6 +780,10 @@ function addEventToCalendar(eventData) {
         modalDaySpan.textContent = days[eventData.dayIndex]; // Show day name
         modalDayIndexInput.value = eventData.dayIndex; // Store day index (may not be needed for update if day doesn't change)
 
+        // Show delete button when editing
+        const deleteButton = document.getElementById('delete-event');
+        if (deleteButton) deleteButton.style.display = 'inline-block';
+
         modal.style.display = 'block';
         eventTitleInput.focus();
     }
@@ -765,11 +791,19 @@ function addEventToCalendar(eventData) {
     // --- Project Handling Functions ---
     async function loadProjects() {
         try {
-            const response = await fetch('/api/projects');
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const projects = await response.json();
+            // Prefer localStorage for projects (for local-only mode)
+            let projects = [];
+            const localProjects = localStorage.getItem('projects');
+            if (localProjects) {
+                projects = JSON.parse(localProjects);
+            } else {
+                // Fallback to backend fetch if nothing in localStorage
+                const response = await fetch('/api/projects');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                projects = await response.json();
+                localStorage.setItem('projects', JSON.stringify(projects));
+            }
             window.loadedProjects = projects; // Make available globally for event saving
-            console.log('Fetched projects:', projects); // DEBUG: Log fetched projects
             renderProjects(projects); // Update UI
             return projects; // Return projects for use elsewhere if needed
         } catch (error) {
@@ -810,6 +844,36 @@ function addEventToCalendar(eventData) {
             li.appendChild(colorIndicator);
             li.appendChild(document.createTextNode(project.name)); // Append project name text AFTER indicator
 
+            // Add delete (cross) button, except for 'Others'
+            if (project.id !== 'others-project-id') {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-project-btn';
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.title = 'Delete Project';
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Delete project '${project.name}'? All its events will be moved to Others.`)) return;
+
+                    // Remove project from local list (IndexedDB or in-memory)
+                    let projects = window.loadedProjects || [];
+                    projects = projects.filter(p => p.id !== project.id);
+                    window.loadedProjects = projects;
+                    // Optionally persist projects to localStorage or IndexedDB if needed
+                    localStorage.setItem('projects', JSON.stringify(projects));
+
+                    // Move all events to 'others-project-id'
+                    const eventsToUpdate = await db.events.where('projectId').equals(project.id).toArray();
+                    for (const evt of eventsToUpdate) {
+                        evt.projectId = 'others-project-id';
+                        await db.events.put(evt);
+                    }
+                    // Refresh UI
+                    renderProjects(projects);
+                    await loadEvents();
+                };
+                li.appendChild(deleteBtn);
+            }
+
             projectListUl.appendChild(li);
 
             // Add to modal dropdown
@@ -820,66 +884,32 @@ function addEventToCalendar(eventData) {
         });
     }
 
-    addProjectButton.addEventListener('click', async () => {
+    addProjectButton.addEventListener('click', () => {
         const projectName = newProjectNameInput.value.trim();
         if (!projectName) {
             alert('Please enter a project name.');
             return;
         }
+        // Generate a unique ID for the new project
+        const projectId = 'project-' + Date.now();
+        // Pick a random color for the project (or let user choose in the future)
+        const projectColors = [
+            '#4a90e2', '#e91e63', '#43a047', '#ff9800', '#fbc02d', '#8e24aa', '#00897b', '#d32f2f', '#00bcd4'
+        ];
+        const color = projectColors[Math.floor(Math.random() * projectColors.length)];
+        const newProject = { id: projectId, name: projectName, color };
 
-        try {
-            const response = await fetch('/api/projects', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name: projectName }),
-            });
-
-            const result = await response.json(); // Always parse JSON to check status
-
-            if (!response.ok) {
-                // Use error message from backend if available
-                throw new Error(result.message || `HTTP error! status: ${response.status}`);
-            }
-
-            console.log('Project added:', result);
-            // No need to call loadProjects() again, just add the new one
-             // 1. Add to sidebar list
-             if (projectListUl.querySelector('li').textContent === 'No projects yet.') {
-                 projectListUl.innerHTML = ''; // Clear the placeholder message
-             }
-            const li = document.createElement('li');
-            li.textContent = result.project.name;
-            li.dataset.projectId = result.project.id;
-
-            // Add color indicator
-            const colorIndicator = document.createElement('span');
-            colorIndicator.classList.add('project-color-indicator');
-            // *** Check if project.color exists before applying ***
-            if (result.project.color) {
-                console.log('Rendering project:', result.project.name, 'with color:', result.project.color); // DEBUG
-                colorIndicator.style.backgroundColor = result.project.color;
-            } else {
-                console.warn('Project has no color:', result.project.name); // DEBUG
-                colorIndicator.style.backgroundColor = '#ccc'; // Default color if missing
-            }
-            li.appendChild(colorIndicator);
-
-            projectListUl.appendChild(li);
-
-             // 2. Add to modal dropdown
-            const option = document.createElement('option');
-            option.value = result.project.id;
-            option.textContent = result.project.name;
-            eventProjectSelect.appendChild(option);
-
-            newProjectNameInput.value = ''; // Clear input field
-
-        } catch (error) {
-            console.error('Error adding project:', error);
-            alert(`Failed to add project: ${error.message}`);
+        // Load current projects from window or localStorage
+        let projects = window.loadedProjects;
+        if (!projects || !Array.isArray(projects)) {
+            const localProjects = localStorage.getItem('projects');
+            projects = localProjects ? JSON.parse(localProjects) : [];
         }
+        projects.push(newProject);
+        window.loadedProjects = projects;
+        localStorage.setItem('projects', JSON.stringify(projects));
+        renderProjects(projects);
+        newProjectNameInput.value = '';
     });
 
 
