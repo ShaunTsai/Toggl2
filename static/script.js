@@ -28,6 +28,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+    // --- Drag-and-Drop Event Creation State ---
+    let isDraggingEvent = false;         // True if user is dragging to create event
+    let dragStartSlot = null;            // DOM element of the slot where drag started
+    let dragEndSlot = null;              // DOM element of the slot where drag ends
+    let dragStartInfo = null;            // {dayIndex, hour, mins} at drag start
+    let dragEndInfo = null;              // {dayIndex, hour, mins} at drag end
+    // These will be used for drag-and-drop event creation logic
+
+
+    // --- Drag-and-Drop Visual Feedback Helpers ---
+    function highlightDragRange() {
+        clearDragHighlights();
+        if (!dragStartSlot || !dragEndSlot) return;
+        // Get all slot-quarters in the grid
+        const allSlots = Array.from(document.querySelectorAll('.slot-quarter'));
+        // Find indices of start and end
+        const startIdx = allSlots.indexOf(dragStartSlot);
+        const endIdx = allSlots.indexOf(dragEndSlot);
+        if (startIdx === -1 || endIdx === -1) return;
+        // Get range (either direction)
+        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+        for (let i = from; i <= to; i++) {
+            allSlots[i].classList.add('drag-select');
+        }
+    }
+    function clearDragHighlights() {
+        document.querySelectorAll('.slot-quarter.drag-select').forEach(el => el.classList.remove('drag-select'));
+    }
+
     // Step 1: Attach handler to 'Today' button
     const todayBtn = document.querySelector('.calendar-nav-today');
     if (todayBtn) {
@@ -270,6 +299,76 @@ document.addEventListener('DOMContentLoaded', function() {
                     slotQuarter.addEventListener('click', (e) => {
                         e.stopPropagation(); // Prevent bubbling to parent
                         openAddEventModalWithMinutes(day, dayIndex, hour, mins);
+                    });
+
+                    // --- Drag-and-Drop Event Creation Handlers ---
+                    slotQuarter.addEventListener('mousedown', (e) => {
+                        isDraggingEvent = true;
+                        dragStartSlot = slotQuarter;
+                        dragEndSlot = slotQuarter;
+                        dragStartInfo = {
+                            dayIndex: dayIndex,
+                            hour: hour,
+                            mins: mins
+                        };
+                        dragEndInfo = {
+                            dayIndex: dayIndex,
+                            hour: hour,
+                            mins: mins
+                        };
+                        highlightDragRange();
+                    });
+                    slotQuarter.addEventListener('mouseenter', (e) => {
+                        if (isDraggingEvent) {
+                            dragEndSlot = slotQuarter;
+                            dragEndInfo = {
+                                dayIndex: dayIndex,
+                                hour: hour,
+                                mins: mins
+                            };
+                            highlightDragRange();
+                        }
+                    });
+                    // Mouseup on document to finish drag
+                    document.addEventListener('mouseup', (e) => {
+                        if (isDraggingEvent) {
+                            isDraggingEvent = false;
+                            // Compute the selected range (start and end slot info)
+                            if (dragStartInfo && dragEndInfo) {
+                                // Sort start and end
+                                let a = dragStartInfo;
+                                let b = dragEndInfo;
+                                // Compare by dayIndex, then hour, then mins
+                                const isEarlier = (x, y) =>
+                                    x.dayIndex < y.dayIndex ||
+                                    (x.dayIndex === y.dayIndex && x.hour < y.hour) ||
+                                    (x.dayIndex === y.dayIndex && x.hour === y.hour && x.mins <= y.mins);
+                                let start, end;
+                                if (isEarlier(a, b)) {
+                                    start = a; end = b;
+                                } else {
+                                    start = b; end = a;
+                                }
+                                // Open modal with pre-filled times
+                                // Use the day and dayIndex from start, and pass start/end times
+                                openAddEventModalWithMinutes(
+                                    days[start.dayIndex],
+                                    start.dayIndex,
+                                    start.hour,
+                                    start.mins
+                                );
+                                // Compute end time: last slot + 15 mins
+                                let endMinutes = end.hour * 60 + end.mins + 15;
+                                let endHour = Math.floor(endMinutes / 60);
+                                let endMins = endMinutes % 60;
+                                eventEndTimeInput.value = `${String(endHour).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+                            }
+                            clearDragHighlights();
+                            dragStartSlot = null;
+                            dragEndSlot = null;
+                            dragStartInfo = null;
+                            dragEndInfo = null;
+                        }
                     });
 
                     parentSlot.appendChild(slotQuarter);
