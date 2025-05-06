@@ -803,6 +803,15 @@ function addEventToCalendar(eventData) {
                 projects = await response.json();
                 localStorage.setItem('projects', JSON.stringify(projects));
             }
+            // Seed with 'Others' project if empty
+            if (!projects || projects.length === 0) {
+                projects = [{
+                    id: 'others-project-id',
+                    name: 'Others',
+                    color: '#bdbdbd'
+                }];
+                localStorage.setItem('projects', JSON.stringify(projects));
+            }
             window.loadedProjects = projects; // Make available globally for event saving
             renderProjects(projects); // Update UI
             return projects; // Return projects for use elsewhere if needed
