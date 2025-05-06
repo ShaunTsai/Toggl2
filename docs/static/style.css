@@ -1,0 +1,673 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.calendar-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+    margin-top: 8px;
+}
+
+.calendar-nav.super-wide {
+    width: 100%;
+    justify-content: space-between;
+    margin: 24px 0 2px 0;
+    padding: 0 0 4px 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+
+.calendar-nav-left,
+.calendar-nav-right {
+    background: #fff;
+    border: 1px solid #bbb;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 1.5em;
+    color: #333;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    transition: background 0.2s, box-shadow 0.2s;
+    outline: none;
+}
+
+.calendar-nav-today {
+    background: #f8f8f8;
+    border: 1.5px solid #bbb;
+    border-radius: 18px;
+    height: 36px;
+    min-width: 80px;
+    padding: 0 24px;
+    font-size: 1em;
+    font-weight: bold;
+    color: #357abd;
+    margin: 0 10px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+    outline: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.calendar-nav-today:hover {
+    background: #e3f2fd;
+    color: #174a7c;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.calendar-nav-left:hover,
+.calendar-nav-right:hover {
+    background: #f0f0f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+body {
+    font-family: sans-serif;
+    margin: 0; /* Remove default margin */
+    background-color: #f4f4f4;
+    display: flex; /* Use flexbox for overall layout */
+    min-height: 100vh; /* Ensure body takes full height */
+}
+
+.app-container { /* Renamed body selector */
+    display: flex;
+    width: 100%; /* Take full width */
+    position: relative;
+}
+
+.sidebar {
+    width: 200px; /* Fixed width for sidebar */
+    flex-shrink: 1; /* Prevent sidebar from shrinking */
+    background-color: #e9ecef;
+    padding: 15px;
+    border-right: 1px solid #ccc;
+    height: 100vh; /* Make sidebar full height */
+    overflow-y: auto; /* Allow scrolling if content exceeds height */
+    box-sizing: border-box;
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    color: #333;
+    text-align: center;
+}
+
+#project-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+}
+
+#project-list li {
+    padding: 8px 5px;
+    margin-bottom: 5px;
+    background-color: #fff;
+    border-radius: 3px;
+    border: 1px solid #ddd;
+    font-size: 0.9em;
+    cursor: pointer;
+    position: relative;
+}
+
+.delete-project-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #fff;
+    border: 1px solid #bbb;
+    color: #b71c1c;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 14px;
+    line-height: 16px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s, border 0.2s;
+    z-index: 2;
+}
+#project-list li:hover .delete-project-btn {
+    display: flex;
+}
+.delete-project-btn:hover {
+    background: #ffeaea;
+    border: 1px solid #e53935;
+}
+#project-list li:hover {
+    background-color: #f0f0f0;
+}
+
+/* Style for the project color indicator */
+.project-color-indicator {
+    display: inline-block; /* Allow width/height */
+    width: 10px;
+    height: 10px;
+    border-radius: 50%; /* Make it a circle */
+    margin-right: 8px;
+    vertical-align: middle; /* Align nicely with text */
+    border: 1px solid rgba(0, 0, 0, 0.1); /* Subtle border */
+}
+
+.add-project-form {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    align-items: center;
+}
+
+.add-project-form input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px;
+    margin-bottom: 0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+.add-project-form button {
+    flex: 0 0 auto;
+    padding: 8px 16px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.add-project-form button:hover {
+    background-color: #218838;
+}
+
+
+.main-content {
+    flex-grow: 1; /* Allow main content to fill remaining space */
+    padding: 20px;
+    overflow: auto; /* Allow scrolling for calendar etc. if needed */
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-top: 0; /* Adjusted margin */
+    margin-bottom: 15px;
+}
+
+.calendar-container {
+    display: flex;
+    margin-top: 20px;
+    border: none;
+    background-color: #fff;
+    /* Make container scrollable if content overflows */
+    overflow: auto;
+    max-height: 80vh; /* Limit height to encourage scrolling */
+}
+
+.time-axis {
+    width: max-content;
+    min-width: 0;
+    padding-top: 30px; /* Align with header height - adjust if header changes */
+    border-right: 1px solid #eee; /* Match grid lines */
+    background-color: #f9f9f9; /* Slightly different background */
+    flex-shrink: 1; /* Prevent time axis from shrinking */
+}
+
+.time-axis-spacer {
+    width: max-content;
+    min-width: max-content;
+    flex-shrink: 1;
+}
+
+.time-label {
+    height: 60px; /* Match time slot height */
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+    padding-right: 5px;
+    font-size: 12px;
+    color: #555;
+    border-bottom: none;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.time-label span {
+    display: inline-block;
+    background-color: transparent;
+    padding: 0 2px 0 8px;
+    border-left: 2px solid #e0e0e0;
+    position: relative;
+    z-index: 1;
+    margin-top: 0;
+    line-height: 1;
+    vertical-align: top;
+}
+
+.time-label:last-child {
+    border-bottom: none;
+}
+
+
+.calendar-grid {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allow grid to take remaining space */
+    width: 100%;
+    box-sizing: border-box;
+}
+.calendar-header {
+    display: flex;
+    width: 100%;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #ccc;
+    height: 54px;
+    align-items: stretch;
+    box-sizing: border-box;
+}
+.calendar-header .time-axis-spacer {
+    width: max-content;
+    min-width: max-content;
+}
+.header-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 2px;
+    box-sizing: border-box;
+}
+.header-day {
+    font-weight: bold;
+    font-size: 15px;
+    color: #333;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+.header-date {
+    font-size: 13px;
+    color: #888;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+}
+
+.days-header {
+    display: flex;
+    height: 30px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+    position: sticky; /* Keep header visible */
+    top: 0;
+    z-index: 5; /* Below time axis but above grid content */
+}
+.days-header .time-axis-spacer {
+    width: max-content;
+    min-width: max-content;
+}
+.day-label {
+    flex: 1;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: #333;
+    line-height: 30px;
+}
+
+.dates-header {
+    display: flex;
+    height: 22px;
+    background-color: #fafafa;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+    align-items: center;
+}
+.dates-header .time-axis-spacer {
+    width: max-content;
+    min-width: max-content;
+}
+.date-label {
+    flex: 1;
+    padding: 0 2px;
+    font-size: 13px;
+    color: #888;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+}
+
+.day-label {
+    flex: 1; /* Equal width for each day */
+    text-align: center;
+    font-weight: bold;
+    line-height: 30px; /* Center text vertically */
+    font-size: 14px;
+    color: #333;
+}
+.day-label:first-child { /* Style the placeholder Time column header */
+     flex-basis: 60px; /* Match time axis width */
+     flex-grow: 0;
+     flex-shrink: 1;
+     border-left: 1px solid #ccc; /* Make border more prominent */
+     background-color: #f9f9f9; /* Match time axis background */
+     /* Make sticky with the time-axis */
+     position: sticky;
+     left: 0;
+     z-index: 11; /* Above time axis */
+ }
+.day-label:last-child {
+    border-right: none;
+}
+
+.days-header .day-label:not(:first-child) {
+    border-left: 1px solid #eee;
+}
+
+.days-header .day-label:first-of-type {
+     border-left: none;
+}
+
+
+.grid-content {
+    display: flex;
+    flex-grow: 1; /* Allow content to fill remaining space */
+    position: relative; /* Needed for absolute positioning of events */
+}
+.grid-content .time-axis-spacer {
+    width: max-content;
+    min-width: max-content;
+    flex-shrink: 1;
+}
+.grid-content .day-column {
+    flex: 1;
+}
+.day-column {
+    flex: 1; /* Equal width */
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #eee;
+    position: relative; /* For positioning events within the column */
+    border-left: 1px solid #eee;
+    /* SVG background with wider dash gap for dotted lines */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='60' viewBox='0 0 1 60' preserveAspectRatio='none'%3E%3Cline x1='0' y1='15' x2='1' y2='15' stroke='%23e0e0e0' stroke-width='0.5' stroke-dasharray='1, 3'/%3E%3Cline x1='0' y1='30' x2='1' y2='30' stroke='%23e0e0e0' stroke-width='0.5'/%3E%3Cline x1='0' y1='45' x2='1' y2='45' stroke='%23e0e0e0' stroke-width='0.5' stroke-dasharray='1, 3'/%3E%3Cline x1='0' y1='59.5' x2='1' y2='59.5' stroke='%23cccccc' stroke-width='0.5'/%3E%3C/svg%3E");
+    background-repeat: repeat-y;
+    background-size: 100% 60px; /* Repeat every 60px (hour slot height) */
+}
+.day-column:last-child {
+    border-right: none;
+}
+
+.day-column:first-child {
+    border-left: none;
+}
+
+.time-slot {
+  display: flex;
+  flex-direction: column;
+  height: 60px; /* 1 hour = 60px */
+  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+  position: relative;
+}
+
+.slot-quarter {
+  flex: 1 0 0;
+  border-top: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.slot-quarter-00 {
+  border-top: none;
+}
+
+.slot-quarter:hover {
+  background: #e3f2fd;
+}
+
+.slot-quarter-15, .slot-quarter-30, .slot-quarter-45 {
+  /* Subtle lines for separation */
+  background-clip: padding-box;
+}
+
+
+
+.event {
+    position: absolute !important;
+    left: unset;
+    width: unset;
+    /* Remove margin-left/right for perfect fit */
+    min-width: 20px;
+    background-color: #4a90e2;
+    color: white;
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+    z-index: 1;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Drag-and-drop selection highlight */
+.slot-quarter.drag-select {
+  background: #f0f0f0 !important; /* Much lighter grey */
+}
+
+
+.event[style] {
+    left: var(--event-left, unset) !important;
+    width: var(--event-width, unset) !important;
+    position: absolute !important;
+}
+
+
+/* --- Now Line --- */
+.now-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #ff2222;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+/* Highlight for today's date in header */
+.header-col.today-header {
+    background: linear-gradient(0deg, #e3f2fd 80%, #bbdefb 100%);
+    border-radius: 6px;
+    font-weight: bold;
+    padding: 2px 0;
+}
+
+.header-col.today-header .header-day,
+.header-col.today-header .header-date {
+    color: #1976d2;
+    text-shadow: 0 1px 6px #bbdefb, 0 0px 1px #2196f3;
+}
+
+
+/* --- Modal Styling --- */
+.modal {
+  position: fixed; /* Stay in place */
+  z-index: 20; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto; /* 15% from the top and centered */
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%; /* Could be more or less, depending on screen size */
+  max-width: 400px; /* Max width */
+  border-radius: 5px;
+  box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+  position: relative;
+}
+
+#settings-modal h2 {
+  margin-top: 10px;
+  margin-bottom: 24px;
+}
+#settings-modal label {
+  display: block;
+  margin-bottom: 12px;
+}
+#settings-modal input[type="number"] {
+  display: block;
+  margin-bottom: 28px;
+}
+#save-settings {
+  margin-top: 24px !important;
+  margin-bottom: 8px;
+  width: 100%;
+  background-color: #607d8b;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 0;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+#save-settings:hover {
+  background-color: #455a64;
+}
+
+.close-settings {
+  position: absolute !important;
+  top: 8px;
+  right: 12px;
+  cursor: pointer;
+  font-size: 28px;
+  z-index: 2;
+}
+
+.close-button {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close-button:hover,
+.close-button:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#save-event {
+    margin-top: 20px; /* Add space above the save button */
+    background-color: #4CAF50; /* Green */
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#delete-event {
+    margin-top: 20px;
+    background-color: #e53935; /* Red */
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#delete-event:hover {
+    background-color: #b71c1c;
+}
+
+#save-event:hover {
+    background-color: #45a049;
+}
+
+/* --- Button Styling --- */
+#settings-btn {
+    position: absolute;
+    top: 10px;
+    right: 120px;
+    padding: 8px 15px;
+    background-color: #607d8b; /* Blue-grey */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    z-index: 10;
+}
+#settings-btn:hover {
+    background-color: #455a64;
+}
+
+#export-csv {
+    position: absolute;
+    top: 10px; /* Adjust as needed */
+    right: 10px; /* Adjust as needed */
+    padding: 8px 15px;
+    background-color: #4CAF50; /* Green background */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    z-index: 10; /* Ensure it's above other content if needed */
+}
+
+#export-csv:hover {
+    background-color: #45a049;
+}
+
+/* --- Calendar Grid Styling --- */
